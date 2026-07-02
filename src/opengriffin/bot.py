@@ -1270,6 +1270,12 @@ async def _post_shutdown(app: Application) -> None:
 def main() -> None:
     if not BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN not set")
+    if not ALLOWED_USERS:
+        log.warning(
+            "TELEGRAM_ALLOWED_USERS is not set — ANY Telegram user who finds this "
+            "bot can run tools on this machine. Send /whoami to the bot to get "
+            "your numeric id, then set TELEGRAM_ALLOWED_USERS=<id> in .env."
+        )
     log.info("Allowed users: %s | home chat: %s", ALLOWED_USERS or "(open)", HOME_CHAT_ID)
     app = (
         Application.builder()

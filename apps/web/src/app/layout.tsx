@@ -26,6 +26,21 @@ export const metadata: Metadata = {
     url: "https://opengriffin.com",
     siteName: "OpenGriffin",
     type: "website",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "OpenGriffin — the Claude-native personal agent that learns while you sleep",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OpenGriffin — Self-evolving personal agent",
+    description:
+      "OSS Telegram-first agent. 21 providers BYO-key. Persistent memory, daily journal, skill hub. Free forever.",
+    images: ["/og.png"],
   },
 };
 

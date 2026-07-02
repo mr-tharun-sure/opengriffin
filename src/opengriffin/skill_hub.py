@@ -77,8 +77,17 @@ PERMISSIVE = {"apache-2.0", "mit", "bsd"}
 # ----------------------------- install paths -----------------------------
 
 
+def _validate_name(name: str) -> str:
+    """Reject names that could escape SKILLS_ROOT (path traversal)."""
+    name = name.strip()
+    if not name or name.startswith(".") or any(c in name for c in ("/", "\\", "\0")):
+        raise ValueError(f"invalid skill name: {name!r}")
+    return name
+
+
 def _install_skill_dir(src_dir: Path, name: str, *, source: str, license_kind: str) -> dict:
     """Copy a single skill into ~/.claude/skills/<name>/ and record the install."""
+    name = _validate_name(name)
     if not (src_dir / "SKILL.md").is_file():
         raise ValueError(f"no SKILL.md in {src_dir}")
     dest = SKILLS_ROOT / name
@@ -173,6 +182,10 @@ def install(source: str, *, allow_unknown_license: bool = False) -> dict:
 
 def uninstall(name: str) -> bool:
     """Remove a skill and update its install record."""
+    try:
+        name = _validate_name(name)
+    except ValueError:
+        return False
     p = SKILLS_ROOT / name
     if not p.is_dir():
         return False
