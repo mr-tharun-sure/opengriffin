@@ -1,30 +1,37 @@
 "use client";
 
 import * as React from "react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 
 /**
  * Theme toggle — flips the `dark` class on <html> and persists the choice to
  * localStorage. The initial class is set before paint by the inline script in
- * layout.tsx (no flash); this only mirrors + mutates it.
+ * layout.tsx (no flash); this only mirrors + mutates it. The <html> class is
+ * the single source of truth, mirrored into React via useSyncExternalStore.
  */
+function subscribe(onStoreChange: () => void) {
+  const observer = new MutationObserver(onStoreChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+  });
+  return () => observer.disconnect();
+}
+
+const getSnapshot = (): "light" | "dark" =>
+  document.documentElement.classList.contains("dark") ? "dark" : "light";
+
+// Static export prerenders without a DOM; light is the site default.
+const getServerSnapshot = (): "light" | "dark" => "light";
+
 export function ThemeToggle({ className }: { className?: string }) {
   const reduce = useReducedMotion();
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setTheme(
-      document.documentElement.classList.contains("dark") ? "dark" : "light",
-    );
-    setMounted(true);
-  }, []);
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   const toggle = () => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
     document.documentElement.classList.toggle("dark", next === "dark");
     try {
       localStorage.setItem("theme", next);
@@ -37,11 +44,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     <button
       type="button"
       onClick={toggle}
-      aria-label={
-        mounted
-          ? `Switch to ${theme === "dark" ? "light" : "dark"} mode`
-          : "Toggle theme"
-      }
+      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
       className={
         "relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--color-border-soft)] text-[var(--color-text-dim)] transition-colors hover:border-[var(--color-border-hover)] hover:text-[var(--color-text)] " +
         (className ?? "")

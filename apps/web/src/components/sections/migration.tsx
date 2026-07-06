@@ -11,7 +11,7 @@ export function Migration() {
         </RevealItem>
         <RevealItem as="p" className="mt-4 text-[var(--color-text-dim)] max-w-2xl">
           Built-in importers move your memories, cron jobs, and recent sessions
-          into OpenGriffin's <code className="mono">~/.opengriffin/</code> layout
+          into OpenGriffin&apos;s <code className="mono">~/.opengriffin/</code> layout
           in one command.
         </RevealItem>
 

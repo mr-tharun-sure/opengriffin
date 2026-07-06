@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import importlib
 import logging
 import os
 import time
@@ -96,6 +97,36 @@ logging.basicConfig(
 log = logging.getLogger("opengriffin")
 
 
+# Optional feature servers: (module name, server attribute). A failure to
+# import is logged rather than silently swallowed — a typo in a module must
+# not quietly remove its tools from the agent.
+_OPTIONAL_SERVERS: list[tuple[str, str]] = [
+    # Killer features (12)
+    ("skill_hub", "SKILL_HUB_SERVER"),
+    ("echo_memory", "ECHO_SERVER"),
+    ("triggers", "TRIGGERS_SERVER"),
+    ("pods", "PODS_SERVER"),
+    ("wallet", "WALLET_SERVER"),
+    ("soul_sync", "SOUL_SYNC_SERVER"),
+    ("routing", "ROUTING_SERVER"),
+    ("drift", "DRIFT_SERVER"),
+    ("self_healing", "HEAL_SERVER"),
+    ("skill_strategy", "STRATEGY_SERVER"),
+    ("reputation", "REPUTATION_SERVER"),
+    # Frontier features (post-30): predictive world model + counterfactual twin,
+    # inverse-safety proofs, generative UI, mesa-cognition supervisor,
+    # skill leasing, personal causal layer, adversarial market.
+    ("world_model", "WORLD_MODEL_SERVER"),
+    ("twin", "TWIN_SERVER"),
+    ("proofs", "PROOFS_SERVER"),
+    ("gen_ui", "GEN_UI_SERVER"),
+    ("mesa", "MESA_SERVER"),
+    ("skill_lease", "LEASE_SERVER"),
+    ("causal", "CAUSAL_SERVER"),
+    ("adversarial", "ADV_SERVER"),
+]
+
+
 def build_mcp_servers() -> dict:
     servers = {
         "memory": memory_module.MEMORY_SERVER,
@@ -103,124 +134,16 @@ def build_mcp_servers() -> dict:
         "kanban": kanban_module.KANBAN_SERVER,
         "recall": recall_module.RECALL_SERVER,
     }
-    # Killer features (12)
-    try:
-        from . import skill_hub
-
-        servers["skill_hub"] = skill_hub.SKILL_HUB_SERVER
-    except Exception:
-        pass
-    try:
-        from . import echo_memory
-
-        servers["echo_memory"] = echo_memory.ECHO_SERVER
-    except Exception:
-        pass
-    try:
-        from . import triggers as _triggers
-
-        servers["triggers"] = _triggers.TRIGGERS_SERVER
-    except Exception:
-        pass
-    try:
-        from . import pods
-
-        servers["pods"] = pods.PODS_SERVER
-    except Exception:
-        pass
-    try:
-        from . import wallet
-
-        servers["wallet"] = wallet.WALLET_SERVER
-    except Exception:
-        pass
-    try:
-        from . import soul_sync
-
-        servers["soul_sync"] = soul_sync.SOUL_SYNC_SERVER
-    except Exception:
-        pass
-    try:
-        from . import routing
-
-        servers["routing"] = routing.ROUTING_SERVER
-    except Exception:
-        pass
-    try:
-        from . import drift
-
-        servers["drift"] = drift.DRIFT_SERVER
-    except Exception:
-        pass
-    try:
-        from . import self_healing
-
-        servers["self_healing"] = self_healing.HEAL_SERVER
-    except Exception:
-        pass
-    try:
-        from . import skill_strategy
-
-        servers["skill_strategy"] = skill_strategy.STRATEGY_SERVER
-    except Exception:
-        pass
-    try:
-        from . import reputation
-
-        servers["reputation"] = reputation.REPUTATION_SERVER
-    except Exception:
-        pass
-    # Frontier features (post-30): predictive world model + counterfactual twin,
-    # inverse-safety proofs, generative UI, mesa-cognition supervisor,
-    # skill leasing, personal causal layer, adversarial market.
-    try:
-        from . import world_model
-
-        servers["world_model"] = world_model.WORLD_MODEL_SERVER
-    except Exception:
-        pass
-    try:
-        from . import twin
-
-        servers["twin"] = twin.TWIN_SERVER
-    except Exception:
-        pass
-    try:
-        from . import proofs
-
-        servers["proofs"] = proofs.PROOFS_SERVER
-    except Exception:
-        pass
-    try:
-        from . import gen_ui
-
-        servers["gen_ui"] = gen_ui.GEN_UI_SERVER
-    except Exception:
-        pass
-    try:
-        from . import mesa
-
-        servers["mesa"] = mesa.MESA_SERVER
-    except Exception:
-        pass
-    try:
-        from . import skill_lease
-
-        servers["skill_lease"] = skill_lease.LEASE_SERVER
-    except Exception:
-        pass
-    try:
-        from . import causal
-
-        servers["causal"] = causal.CAUSAL_SERVER
-    except Exception:
-        pass
-    try:
-        from . import adversarial
-
-        servers["adversarial"] = adversarial.ADV_SERVER
-    except Exception:
-        pass
+    for mod_name, attr in _OPTIONAL_SERVERS:
+        try:
+            mod = importlib.import_module(f".{mod_name}", package=__package__)
+            servers[mod_name] = getattr(mod, attr)
+        except Exception:
+            log.warning(
+                "optional MCP server %r failed to load — its tools will be missing",
+                mod_name,
+                exc_info=True,
+            )
     # Playwright via npx — only register if npm is available; the SDK will
     # handle launch errors gracefully if the package can't be downloaded.
     if os.environ.get("CLAUDE_BOT_DISABLE_PLAYWRIGHT") != "1":
@@ -1155,45 +1078,64 @@ async def _post_init(app: Application) -> None:
         name="daily self-improvement",
         replace_existing=True,
     )
-    # Echo memory nightly consolidation
-    try:
-        from . import echo_memory as _echo
-
-        scheduler.add_job(
-            _echo.consolidate_nightly,
-            trigger=CronTrigger(hour=IDLE_RESET_HOUR, minute=45),
-            id="__echo_consolidate",
-            name="echo memory consolidation",
-            replace_existing=True,
-        )
-    except Exception:
-        pass
-    # Drift detection nightly
-    try:
-        from . import drift as _drift
-
-        scheduler.add_job(
-            _drift.detect_drift,
-            trigger=CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=0),
-            id="__drift_check",
-            name="drift detection",
-            replace_existing=True,
-        )
-    except Exception:
-        pass
-    # Voice-card refresh weekly
-    try:
-        from . import soul_sync as _soul
-
-        scheduler.add_job(
-            _soul.refresh_voice_card,
-            trigger=CronTrigger(day_of_week="sun", hour=5, minute=0),
-            id="__voice_refresh",
-            name="voice card refresh",
-            replace_existing=True,
-        )
-    except Exception:
-        pass
+    # Optional nightly jobs: (module, function attr, trigger, job id, name).
+    # Like _OPTIONAL_SERVERS, a broken module is logged, never silently skipped.
+    optional_jobs = [
+        (
+            "echo_memory",
+            "consolidate_nightly",
+            CronTrigger(hour=IDLE_RESET_HOUR, minute=45),
+            "__echo_consolidate",
+            "echo memory consolidation",
+        ),
+        (
+            "drift",
+            "detect_drift",
+            CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=0),
+            "__drift_check",
+            "drift detection",
+        ),
+        (
+            "soul_sync",
+            "refresh_voice_card",
+            CronTrigger(day_of_week="sun", hour=5, minute=0),
+            "__voice_refresh",
+            "voice card refresh",
+        ),
+        (
+            "world_model",
+            "train",
+            CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=15),
+            "__world_model_train",
+            "world model nightly retrain",
+        ),
+        (
+            "mesa",
+            "run_report",
+            CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=30),
+            "__mesa_report",
+            "mesa-cognition drift report",
+        ),
+        (
+            "causal",
+            "discover_from_world_model",
+            CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=45),
+            "__causal_discover",
+            "causal edge discovery",
+        ),
+    ]
+    for mod_name, func_attr, trigger, job_id, job_name in optional_jobs:
+        try:
+            mod = importlib.import_module(f".{mod_name}", package=__package__)
+            scheduler.add_job(
+                getattr(mod, func_attr),
+                trigger=trigger,
+                id=job_id,
+                name=job_name,
+                replace_existing=True,
+            )
+        except Exception:
+            log.warning("nightly job %r failed to install", job_name, exc_info=True)
     # Ambient triggers from triggers.json
     try:
         from . import triggers as _trig
@@ -1203,45 +1145,6 @@ async def _post_init(app: Application) -> None:
             log.info("Installed %d ambient triggers", n)
     except Exception:
         log.exception("trigger install failed")
-    # Personal World Model — nightly retrain
-    try:
-        from . import world_model as _wm
-
-        scheduler.add_job(
-            _wm.train,
-            trigger=CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=15),
-            id="__world_model_train",
-            name="world model nightly retrain",
-            replace_existing=True,
-        )
-    except Exception:
-        pass
-    # Mesa-cognition supervisor — nightly drift report
-    try:
-        from . import mesa as _mesa
-
-        scheduler.add_job(
-            _mesa.run_report,
-            trigger=CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=30),
-            id="__mesa_report",
-            name="mesa-cognition drift report",
-            replace_existing=True,
-        )
-    except Exception:
-        pass
-    # Causal layer — daily edge discovery from world-model log
-    try:
-        from . import causal as _causal
-
-        scheduler.add_job(
-            _causal.discover_from_world_model,
-            trigger=CronTrigger(hour=IDLE_RESET_HOUR + 1, minute=45),
-            id="__causal_discover",
-            name="causal edge discovery",
-            replace_existing=True,
-        )
-    except Exception:
-        pass
     scheduler.start()
     botctx.set_context(
         bot=app.bot,

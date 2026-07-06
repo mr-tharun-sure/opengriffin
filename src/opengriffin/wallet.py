@@ -7,7 +7,10 @@ agent prepares a signed payment, pings the user via Telegram for approval
 
 This MVP implements the client side. Real wallet signing is delegated to
 an external signer (env: WALLET_SIGNER_URL) so we never hold private keys.
-Per-skill and per-day spending caps are enforced.
+Per-skill and per-day spending caps are enforced. The signer receives
+`approved_amount_usd` next to the raw challenge and must refuse to sign a
+payment worth more — the challenge is vendor-controlled and can't be trusted
+to match the amount the user approved.
 
 Env:
   WALLET_SIGNER_URL          — your signer service URL (returns signed payment header)
@@ -187,7 +190,10 @@ async def fetch_with_x402(
             "payment": {"amount_usd": amount, "paid": False},
         }
 
-    # Sign payment via external signer
+    # Sign payment via external signer. The vendor's claimed amount is what
+    # the user approved, but the raw challenge is what gets signed — so the
+    # approved amount is sent alongside it and the signer MUST refuse to sign
+    # a payment worth more than approved_amount_usd. Never sign blind.
     signer = os.environ.get("WALLET_SIGNER_URL")
     if not signer:
         return {
@@ -197,7 +203,15 @@ async def fetch_with_x402(
             "payment": {"amount_usd": amount, "paid": False},
         }
     sign_resp = await asyncio.to_thread(
-        requests.post, signer, json={"challenge": challenge}, timeout=20
+        requests.post,
+        signer,
+        json={
+            "challenge": challenge,
+            "approved_amount_usd": amount,
+            "vendor": vendor,
+            "item": item,
+        },
+        timeout=20,
     )
     sign_resp.raise_for_status()
     payment_header = sign_resp.json().get("payment_header")
