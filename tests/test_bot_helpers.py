@@ -1,5 +1,9 @@
 """Tests for pure helpers in bot.py and the optional-server registry."""
 
+import os
+import subprocess
+import sys
+
 from opengriffin import bot
 
 
@@ -27,16 +31,26 @@ def test_summarize_non_dict_input():
     assert bot._summarize_tool_input("Bash", "not-a-dict") == ""
 
 
-def test_optional_servers_all_load():
-    """Every module in the registry must import and expose its server attr —
+def test_optional_servers_all_load(tmp_path):
+    """Every module in the registry must import and expose its server —
     build_mcp_servers logs-and-continues at runtime, but in CI a broken
-    optional module should fail loudly."""
-    import importlib
+    optional module should fail loudly.
 
-    for mod_name, attr in bot._OPTIONAL_SERVERS:
-        mod = importlib.import_module(f"opengriffin.{mod_name}")
-        assert hasattr(mod, attr), f"{mod_name} lacks {attr}"
-
-    servers = bot.build_mcp_servers()
-    for mod_name, _ in bot._OPTIONAL_SERVERS:
-        assert mod_name in servers
+    Runs in a subprocess with HOME redirected: importing the modules here
+    would poison Python's module cache with real-HOME state paths, breaking
+    the isolated-HOME tests in test_frontier_modules.py."""
+    script = (
+        "from opengriffin import bot\n"
+        "servers = bot.build_mcp_servers()\n"
+        "missing = [m for m, _ in bot._OPTIONAL_SERVERS if m not in servers]\n"
+        "assert not missing, f'optional servers failed to load: {missing}'\n"
+    )
+    env = dict(os.environ, HOME=str(tmp_path))
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
