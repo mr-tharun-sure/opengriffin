@@ -31,3 +31,38 @@ jobs:
         run: uv run ruff format --check src tests
       - name: Test
         run: uv run pytest -q
+
+  installer-macos:
+    # The Linux installer path is covered by the Docker smoke test in the
+    # `test` job; macOS runners have no Docker, so exercise install.sh
+    # natively against this checkout instead.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run installer against this checkout
+        run: |
+          export OPENGRIFFIN_REPO_URL="$PWD"
+          export OPENGRIFFIN_REF="$(git rev-parse HEAD)"
+          export OPENGRIFFIN_HOME="$RUNNER_TEMP/opengriffin"
+          bash scripts/install.sh
+          test -x "$OPENGRIFFIN_HOME/.venv/bin/opengriffin"
+          test -f "$OPENGRIFFIN_HOME/.env"
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build

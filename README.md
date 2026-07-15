@@ -29,8 +29,8 @@ The personal-agent space is crowded — Nous Research's **Hermes Agent**, **Open
 | Readable nightly journal you can screenshot & share | ✅ `griffin card` | ❌ | ❌ | ❌ |
 | Telegram-native onboarding (one messenger, ~2 min) | ✅ | one of many | one of many | one of many |
 | Self-evolving skills | ✅ | ✅ | ◑ | ✅ |
-| Multi-messenger gateways | ✅ 7 | ✅ 10+ | ✅ 50+ | ✅ |
-| BYO-key / multi-provider | ✅ 21 | ✅ 200+ | ✅ | ✅ |
+| Multi-messenger gateways | ✅ 7 | ✅ 7 | ✅ 20+ | ✅ 5 |
+| BYO-key / multi-provider | ✅ 21 | ✅ (incl. 200+ via OpenRouter) | ✅ | ✅ |
 | Local-first / no backend | ✅ | ✅ | ✅ | ✅ |
 | Acts proactively (cron / triggers) | ✅ | ✅ | ✅ heartbeat | ✅ |
 | License | Apache-2.0 | MIT | MIT | OSS |

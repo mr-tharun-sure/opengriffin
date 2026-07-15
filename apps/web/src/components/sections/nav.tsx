@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState } from "react";
+import Link from "next/link";
 import { motion, useScroll, useReducedMotion } from "framer-motion";
 import { GitHubIcon } from "@/components/icons/github";
 import {
@@ -41,7 +42,7 @@ const GITHUB_URL = "https://github.com/ManasaEdavalli-TharunSure/opengriffin";
 function Brand() {
   const reduce = useReducedMotion();
   return (
-    <a
+    <Link
       href="/"
       className="relative z-20 flex items-center gap-2 px-2 font-semibold text-[var(--color-text)]"
     >
@@ -56,7 +57,7 @@ function Brand() {
       <span className="mono ml-1 rounded border border-[var(--color-brand)]/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[var(--color-brand-soft)]">
         v0.1
       </span>
-    </a>
+    </Link>
   );
 }
 

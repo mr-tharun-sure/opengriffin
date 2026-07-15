@@ -57,14 +57,35 @@ def _verify(secret: str, body: bytes, signature_header: str) -> bool:
 
 _TEMPLATE_RE = re.compile(r"\{\{\s*(.+?)\s*\}\}")
 
+# One access path: a root name followed by .attr / ['key'] / ["key"] / [0] segments.
+_SEGMENT_RE = re.compile(r"\.([A-Za-z_][A-Za-z0-9_-]*)|\[\s*(?:'([^']*)'|\"([^\"]*)\"|(\d+))\s*\]")
+_EXPR_RE = re.compile(
+    r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_-]*|\[\s*(?:'[^']*'|\"[^\"]*\"|\d+)\s*\])*"
+)
+
 
 def _render(template: str, ctx: dict[str, Any]) -> str:
-    """Tiny dot-notation template renderer. Supports {{ headers['X'] }} and {{ body.repo.full_name }}."""
+    """Tiny dot-notation template renderer. Supports {{ headers['X'] }} and {{ body.repo.full_name }}.
+
+    Only plain dict/list lookups are allowed — no eval, so a template (or a
+    payload) can never execute code.
+    """
 
     def lookup(expr: str) -> str:
+        if not _EXPR_RE.fullmatch(expr):
+            return f"<missing:{expr}>"
+        root_end = re.match(r"[A-Za-z_][A-Za-z0-9_]*", expr).end()
         try:
-            # Allow Python-style indexing in a sandboxed eval.
-            return str(eval(expr, {"__builtins__": {}}, ctx))
+            cur: Any = ctx[expr[:root_end]]
+            for seg in _SEGMENT_RE.finditer(expr, root_end):
+                attr, sq, dq, idx = seg.groups()
+                if attr is not None:
+                    cur = cur[attr]
+                elif idx is not None:
+                    cur = cur[int(idx)]
+                else:
+                    cur = cur[sq if sq is not None else dq]
+            return str(cur)
         except Exception:
             return f"<missing:{expr}>"
 

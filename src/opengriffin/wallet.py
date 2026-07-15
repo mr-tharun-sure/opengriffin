@@ -7,7 +7,10 @@ agent prepares a signed payment, pings the user via Telegram for approval
 
 This MVP implements the client side. Real wallet signing is delegated to
 an external signer (env: WALLET_SIGNER_URL) so we never hold private keys.
-Per-skill and per-day spending caps are enforced.
+Per-skill and per-day spending caps are enforced. The signer receives
+`approved_amount_usd` next to the raw challenge and must refuse to sign a
+payment worth more — the challenge is vendor-controlled and can't be trusted
+to match the amount the user approved.
 
 Env:
   WALLET_SIGNER_URL          — your signer service URL (returns signed payment header)
@@ -56,13 +59,18 @@ def daily_spent_usd() -> float:
     return float(data.get("spend", {}).get(_today(), 0))
 
 
+def skill_spent_usd(skill: str) -> float:
+    data = _load()
+    return float(data.get("skill_spend", {}).get(_today(), {}).get(skill, 0))
+
+
 def can_spend(amount_usd: float, *, skill: str | None = None) -> tuple[bool, str]:
     daily_cap = float(os.environ.get("WALLET_DAILY_USD_CAP", "10"))
     if daily_spent_usd() + amount_usd > daily_cap:
         return False, f"would exceed daily cap (${daily_cap:.2f})"
     if skill:
         per_skill_cap = _load().get("caps", {}).get(skill)
-        if per_skill_cap and daily_spent_usd() + amount_usd > per_skill_cap:
+        if per_skill_cap and skill_spent_usd(skill) + amount_usd > per_skill_cap:
             return False, f"would exceed cap for skill {skill}"
     return True, "ok"
 
@@ -70,9 +78,8 @@ def can_spend(amount_usd: float, *, skill: str | None = None) -> tuple[bool, str
 async def approve_via_telegram(amount_usd: float, vendor: str, item: str) -> bool:
     """Ask the user via Telegram inline buttons to approve a payment."""
     # Reuse the approvals.py infra
-    from botctx import CTX
-
     from . import approvals
+    from .botctx import CTX
 
     if CTX.bot is None or not CTX.home_chat_id:
         return False
@@ -111,16 +118,20 @@ async def approve_via_telegram(amount_usd: float, vendor: str, item: str) -> boo
     return decision == "allow"
 
 
-def record_spend(amount_usd: float, vendor: str, item: str) -> None:
+def record_spend(amount_usd: float, vendor: str, item: str, *, skill: str | None = None) -> None:
     data = _load()
     today = _today()
-    data["spend"][today] = float(data.get("spend", {}).get(today, 0)) + amount_usd
+    data.setdefault("spend", {})[today] = float(data.get("spend", {}).get(today, 0)) + amount_usd
+    if skill:
+        by_skill = data.setdefault("skill_spend", {}).setdefault(today, {})
+        by_skill[skill] = float(by_skill.get(skill, 0)) + amount_usd
     data.setdefault("history", []).append(
         {
             "ts": dt.datetime.now().isoformat(timespec="seconds"),
             "amount_usd": amount_usd,
             "vendor": vendor,
             "item": item,
+            "skill": skill,
         }
     )
     _save(data)
@@ -141,7 +152,7 @@ async def fetch_with_x402(
 
     Returns: {ok, status, body, payment: {amount_usd, vendor, paid: bool}}
     """
-    r = requests.request(method, url, json=body, timeout=30)
+    r = await asyncio.to_thread(requests.request, method, url, json=body, timeout=30)
     if r.status_code != 402:
         return {"ok": True, "status": r.status_code, "body": r.text[:5000], "payment": None}
 
@@ -179,7 +190,10 @@ async def fetch_with_x402(
             "payment": {"amount_usd": amount, "paid": False},
         }
 
-    # Sign payment via external signer
+    # Sign payment via external signer. The vendor's claimed amount is what
+    # the user approved, but the raw challenge is what gets signed — so the
+    # approved amount is sent alongside it and the signer MUST refuse to sign
+    # a payment worth more than approved_amount_usd. Never sign blind.
     signer = os.environ.get("WALLET_SIGNER_URL")
     if not signer:
         return {
@@ -188,7 +202,17 @@ async def fetch_with_x402(
             "body": "WALLET_SIGNER_URL not set; cannot sign",
             "payment": {"amount_usd": amount, "paid": False},
         }
-    sign_resp = requests.post(signer, json={"challenge": challenge}, timeout=20)
+    sign_resp = await asyncio.to_thread(
+        requests.post,
+        signer,
+        json={
+            "challenge": challenge,
+            "approved_amount_usd": amount,
+            "vendor": vendor,
+            "item": item,
+        },
+        timeout=20,
+    )
     sign_resp.raise_for_status()
     payment_header = sign_resp.json().get("payment_header")
     if not payment_header:
@@ -200,9 +224,16 @@ async def fetch_with_x402(
         }
 
     # Retry with payment header
-    r2 = requests.request(method, url, json=body, headers={"X-Payment": payment_header}, timeout=30)
+    r2 = await asyncio.to_thread(
+        requests.request,
+        method,
+        url,
+        json=body,
+        headers={"X-Payment": payment_header},
+        timeout=30,
+    )
     if 200 <= r2.status_code < 300:
-        record_spend(amount, vendor, item)
+        record_spend(amount, vendor, item, skill=skill)
         return {
             "ok": True,
             "status": r2.status_code,
