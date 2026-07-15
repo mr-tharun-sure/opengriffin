@@ -17,9 +17,9 @@ import os
 import tempfile
 import threading
 from dataclasses import dataclass, field
-from pathlib import Path
 
-STORE_FILE = Path(__file__).resolve().parent / "sessions.json"
+from .paths import SESSIONS as STORE_FILE
+
 _lock = threading.Lock()
 
 

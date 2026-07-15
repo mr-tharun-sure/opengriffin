@@ -23,6 +23,11 @@ updates:
       time: "06:00"
       timezone: America/Chicago
     open-pull-requests-limit: 5
+    ignore:
+      # eslint majors break eslint-config-next's bundled plugins (eslint 10
+      # removed context.getFilename); unpin once eslint-config-next supports it.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
       - javascript

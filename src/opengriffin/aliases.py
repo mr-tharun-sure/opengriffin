@@ -10,9 +10,8 @@ Also: per-chat custom system prompt addendum lives in the same file.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-STORE_FILE = Path(__file__).resolve().parent / "aliases.json"
+from .paths import ALIASES as STORE_FILE
 
 
 def _load() -> dict:

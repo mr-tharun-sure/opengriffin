@@ -28,16 +28,14 @@ import json
 import logging
 import os
 import re
-from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 
 from .botctx import CTX
+from .paths import WEBHOOKS as CONFIG_FILE
 
 log = logging.getLogger("opengriffin.webhooks")
-
-CONFIG_FILE = Path(__file__).resolve().parent / "webhooks.json"
 DEFAULT_PORT = int(os.environ.get("WEBHOOK_PORT", "8645"))
 
 
