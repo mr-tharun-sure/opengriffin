@@ -44,7 +44,6 @@ updates:
       timezone: America/Chicago
     labels:
       - dependencies
-      - ci
     commit-message:
       prefix: chore(ci)
       include: scope

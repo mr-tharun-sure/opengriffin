@@ -16,7 +16,7 @@ jobs:
       matrix:
         python: ["3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ matrix.python }}
         uses: actions/setup-python@v7
         with:
@@ -38,7 +38,7 @@ jobs:
     # natively against this checkout instead.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run installer against this checkout
         run: |
           export OPENGRIFFIN_REPO_URL="$PWD"
@@ -54,7 +54,7 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 22
