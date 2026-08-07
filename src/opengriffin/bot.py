@@ -58,9 +58,11 @@ from . import voice as voice_module
 from . import webhooks as webhooks_module
 from .redact import redact
 
-# Auto-migrate state from the legacy ~/claude-bot/ layout if present.
-# Idempotent — skips anything that already exists at the new location.
+# Auto-migrate state from the legacy ~/claude-bot/ layout if present, and
+# state that pre-0.2 modules wrote inside the package directory.
+# Both idempotent — skip anything that already exists at the new location.
 paths_module.migrate_legacy_state()
+paths_module.migrate_package_dir_state()
 
 # Look for .env in priority order: OG_HOME/.env (canonical), CWD (dev
 # convenience for `git clone && drop .env in the repo root && opengriffin run`),
@@ -325,6 +327,28 @@ async def _stream_claude(
     return "".join(chunks).strip(), last_session, cost, in_tok, out_tok
 
 
+# Error fragments that mean the *resumed session* is unusable — not that the
+# request itself is bad. Seen after re-login, account switches, or CLI
+# upgrades: the stored transcript references message ids the API no longer
+# accepts. The only recovery is dropping the session and starting fresh.
+_STALE_SESSION_MARKERS = (
+    "previousmessageid",
+    "previous_message_id",
+    "must be the id from a prior /v1/messages",
+    "no conversation found with session id",
+)
+
+
+def _looks_like_stale_session(err_text: str) -> bool:
+    t = err_text.lower()
+    return any(m in t for m in _STALE_SESSION_MARKERS)
+
+
+def _drop_stale_session(chat_id: int, err: object) -> None:
+    log.warning("stale session for chat %s — dropping it and retrying fresh: %s", chat_id, err)
+    topics_module.reset(chat_id)  # archives the dead session id
+
+
 async def ask_claude_with_progress(
     chat_id: int,
     prompt: str,
@@ -334,14 +358,40 @@ async def ask_claude_with_progress(
     """Run Claude with timeout, heartbeat, and cancellation.
 
     Returns the final reply text. May raise asyncio.TimeoutError or CancelledError.
+    If a resumed session turns out to be stale, it is dropped (archived) and
+    the prompt retried once against a fresh session instead of stranding the
+    chat behind an error the user can only fix with /reset.
     """
     state = progress_module.start(chat_id, status_msg_id)
     hb = asyncio.create_task(_heartbeat(state, bot))
     try:
-        text, sid, cost, in_tok, out_tok = await asyncio.wait_for(
-            _stream_claude(state, prompt),
-            timeout=progress_module.REQUEST_TIMEOUT_SEC,
-        )
+        for attempt in (1, 2):
+            resumed_sid = topics_module.session_id_for(chat_id)
+            try:
+                text, sid, cost, in_tok, out_tok = await asyncio.wait_for(
+                    _stream_claude(state, prompt),
+                    timeout=progress_module.REQUEST_TIMEOUT_SEC,
+                )
+            except (TimeoutError, asyncio.CancelledError):
+                raise
+            except Exception as e:
+                if attempt == 1 and resumed_sid and _looks_like_stale_session(str(e)):
+                    _drop_stale_session(chat_id, e)
+                    continue
+                raise
+            # The CLI sometimes surfaces API errors as result text instead of
+            # raising. Only short error-shaped replies qualify — a real answer
+            # that merely quotes the error must not nuke the session.
+            if (
+                attempt == 1
+                and resumed_sid
+                and text
+                and len(text) < 500
+                and _looks_like_stale_session(text)
+            ):
+                _drop_stale_session(chat_id, text)
+                continue
+            break
         if sid:
             topics_module.set_session_id(chat_id, sid)
         usage_module.record(
@@ -1174,10 +1224,17 @@ def main() -> None:
     if not BOT_TOKEN:
         raise SystemExit("TELEGRAM_BOT_TOKEN not set")
     if not ALLOWED_USERS:
+        if os.environ.get("OPENGRIFFIN_ALLOW_OPEN") != "1":
+            raise SystemExit(
+                "TELEGRAM_ALLOWED_USERS is not set — refusing to start an open bot: "
+                "ANY Telegram user who finds it could run tools on this machine.\n"
+                "Fix: message @userinfobot on Telegram to get your numeric id, then set "
+                "TELEGRAM_ALLOWED_USERS=<id> in ~/.opengriffin/.env.\n"
+                "To intentionally run open to everyone, set OPENGRIFFIN_ALLOW_OPEN=1."
+            )
         log.warning(
-            "TELEGRAM_ALLOWED_USERS is not set — ANY Telegram user who finds this "
-            "bot can run tools on this machine. Send /whoami to the bot to get "
-            "your numeric id, then set TELEGRAM_ALLOWED_USERS=<id> in .env."
+            "OPENGRIFFIN_ALLOW_OPEN=1 — bot is open to ANY Telegram user. "
+            "Set TELEGRAM_ALLOWED_USERS to lock it down."
         )
     log.info("Allowed users: %s | home chat: %s", ALLOWED_USERS or "(open)", HOME_CHAT_ID)
     app = (

@@ -104,7 +104,7 @@ curl -fsSL https://raw.githubusercontent.com/ManasaEdavalli-TharunSure/opengriff
 git clone https://github.com/ManasaEdavalli-TharunSure/opengriffin.git
 cd opengriffin
 uv sync --all-extras
-cp .env.example ~/.opengriffin/.env  # fill in TELEGRAM_BOT_TOKEN
+cp .env.example ~/.opengriffin/.env  # fill in TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USERS
 uv run opengriffin doctor              # verify env + provider
 uv run opengriffin run                 # start the bot
 ```

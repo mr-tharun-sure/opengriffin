@@ -176,6 +176,34 @@ def migrate_legacy_state(*, verbose: bool = False) -> dict:
     }
 
 
+_PKG_DIR = Path(__file__).resolve().parent
+
+
+def migrate_package_dir_state() -> list[str]:
+    """Move JSON state that pre-0.2 modules wrote *next to the code* into OG_HOME.
+
+    aliases/topics/webhooks used to store their files inside the installed
+    package directory (lost on reinstall, broken on read-only installs).
+    Idempotent: an existing file at the OG_HOME destination always wins and
+    the package-dir copy is left untouched for manual inspection.
+    """
+    moved: list[str] = []
+    for fname, dest in (
+        ("sessions.json", SESSIONS),
+        ("aliases.json", ALIASES),
+        ("webhooks.json", WEBHOOKS),
+    ):
+        src = _PKG_DIR / fname
+        if src.is_file() and not dest.exists():
+            try:
+                shutil.move(str(src), str(dest))
+                moved.append(fname)
+                log.info("paths.migrate: %s → %s", src, dest)
+            except OSError:
+                log.warning("could not migrate %s to %s", src, dest, exc_info=True)
+    return moved
+
+
 __all__ = [
     "OG_HOME",
     "ENV_FILE",
