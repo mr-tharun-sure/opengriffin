@@ -28,6 +28,10 @@ updates:
       # removed context.getFilename); unpin once eslint-config-next supports it.
       - dependency-name: eslint
         update-types: ["version-update:semver-major"]
+      # typescript-eslint does not support TS 7 yet (see
+      # typescript-eslint/typescript-eslint#10940); unpin once it ships >=7.1 support.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
     labels:
       - dependencies
       - javascript
