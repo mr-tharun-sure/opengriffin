@@ -107,6 +107,7 @@ _OPTIONAL_SERVERS: list[tuple[str, str]] = [
     ("skill_hub", "SKILL_HUB_SERVER"),
     ("echo_memory", "ECHO_SERVER"),
     ("triggers", "TRIGGERS_SERVER"),
+    ("task_presets", "PRESETS_SERVER"),
     ("pods", "PODS_SERVER"),
     ("wallet", "WALLET_SERVER"),
     ("soul_sync", "SOUL_SYNC_SERVER"),
