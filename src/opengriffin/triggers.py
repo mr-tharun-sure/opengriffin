@@ -34,14 +34,17 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
-from pathlib import Path
 from typing import Annotated
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
+from .paths import TRIGGERS as TRIGGERS_FILE
+
 log = logging.getLogger("opengriffin.triggers")
 
-TRIGGERS_FILE = Path.home() / ".opengriffin" / "triggers.json"
+# An agent action can reply with exactly this token to deliver nothing —
+# the contract that lets periodic watchers stay quiet when nothing changed.
+SILENT_TOKEN = "SILENT"
 
 
 def _load() -> dict:
@@ -93,6 +96,8 @@ async def evaluate(trigger: dict, event_payload: dict | None = None) -> str | No
         return None
 
     # Execute the action
+    from .botctx import CTX
+
     action = trigger.get("action") or {}
     kind = action.get("kind", "agent")
     if kind == "agent":
@@ -100,15 +105,27 @@ async def evaluate(trigger: dict, event_payload: dict | None = None) -> str | No
         if event_payload:
             prompt += "\n\nEvent payload:\n" + json.dumps(event_payload, indent=2)[:2000]
         try:
-            return await bot_module.ask_claude_with_progress(0, prompt, None, status_msg_id=None)
+            result = await bot_module.ask_claude_with_progress(0, prompt, None, status_msg_id=None)
         except Exception as e:
             log.exception("trigger action failed")
             return f"action failed: {e}"
+        # Deliver the result — without this, cron/poll agent triggers run
+        # but their output never reaches the user.
+        if result and result.strip().rstrip(".").upper() != SILENT_TOKEN:
+            chat = action.get("deliver_to") or "home"
+            if chat == "home":
+                chat = CTX.home_chat_id
+            if CTX.bot and chat:
+                try:
+                    await CTX.bot.send_message(chat_id=chat, text=result[:4000])
+                except Exception:
+                    log.exception("trigger %s delivery failed", trigger.get("id"))
+        return result
     elif kind == "send":
         # Just send a message via the configured bot
-        from botctx import CTX
-
         chat = action.get("deliver_to") or CTX.home_chat_id
+        if chat == "home":
+            chat = CTX.home_chat_id
         text = action.get("text", "trigger fired")
         if CTX.bot and chat:
             await CTX.bot.send_message(chat_id=chat, text=text)

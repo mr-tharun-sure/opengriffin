@@ -13,6 +13,7 @@ Public API:
   ALIASES    — aliases.json
   USAGE_LOG  — usage.jsonl
   WEBHOOKS   — webhooks.json
+  TRIGGERS   — triggers.json
   CHECKPOINTS — checkpoints/
   SKILLS_DIR — ~/.claude/skills (Claude Code skill graph; not under OG_HOME)
 
@@ -42,6 +43,7 @@ KANBAN = OG_HOME / "kanban.json"
 ALIASES = OG_HOME / "aliases.json"
 USAGE_LOG = OG_HOME / "usage.jsonl"
 WEBHOOKS = OG_HOME / "webhooks.json"
+TRIGGERS = OG_HOME / "triggers.json"
 CHECKPOINTS = OG_HOME / "checkpoints"
 CHECKPOINTS.mkdir(parents=True, exist_ok=True)
 
@@ -213,6 +215,7 @@ __all__ = [
     "ALIASES",
     "USAGE_LOG",
     "WEBHOOKS",
+    "TRIGGERS",
     "CHECKPOINTS",
     "SKILLS_DIR",
     "MEMORY_FILE",
