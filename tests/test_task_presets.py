@@ -11,6 +11,7 @@ from opengriffin import task_presets, triggers
 @pytest.fixture(autouse=True)
 def _isolated_triggers(tmp_path, monkeypatch):
     monkeypatch.setattr(triggers, "TRIGGERS_FILE", tmp_path / "triggers.json")
+    monkeypatch.setattr(triggers, "STATE_FILE", tmp_path / "trigger_state.json")
 
 
 def test_every_preset_builds_a_valid_trigger():
@@ -18,7 +19,7 @@ def test_every_preset_builds_a_valid_trigger():
         t = task_presets.build(name)
         assert t["id"] == f"preset-{name}"
         assert t["enabled"] is True
-        assert t["source"]["kind"] in ("cron", "poll")
+        assert t["source"]["kind"] in ("cron", "poll", "rss", "file")
         if t["source"]["kind"] == "cron":
             assert t["source"]["expr"]
         assert t["action"]["kind"] == "agent"
@@ -48,6 +49,22 @@ def test_params_flow_into_prompts():
     )
     assert t["source"]["url"] == "https://example.com/x"
     assert t["predicate"] == "Price under $10?"
+
+
+def test_hn_mentions_builds_encoded_poll_url():
+    t = task_presets.build("hn-mentions", {"keywords": "OpenGriffin, claude agent"})
+    assert t["source"]["kind"] == "poll"
+    assert t["source"]["url"].startswith("https://hn.algolia.com/api/v1/search_by_date?query=")
+    assert "OpenGriffin%2C%20claude%20agent" in t["source"]["url"]
+    assert "OpenGriffin, claude agent" in t["action"]["prompt"]
+    # Without keywords there is nothing to poll.
+    assert task_presets.build("hn-mentions")["source"]["url"] == ""
+
+
+def test_daily_presets_never_silent():
+    for name in ("morning-digest", "evening-review", "daily-standup", "weekly-report"):
+        prompt = task_presets.build(name)["action"]["prompt"]
+        assert "never reply SILENT" in prompt
 
 
 class _FakeBot:

@@ -44,6 +44,8 @@ ALIASES = OG_HOME / "aliases.json"
 USAGE_LOG = OG_HOME / "usage.jsonl"
 WEBHOOKS = OG_HOME / "webhooks.json"
 TRIGGERS = OG_HOME / "triggers.json"
+TRIGGER_STATE = OG_HOME / "trigger_state.json"
+DROPBOX_DIR = OG_HOME / "dropbox"
 CHECKPOINTS = OG_HOME / "checkpoints"
 CHECKPOINTS.mkdir(parents=True, exist_ok=True)
 
@@ -216,6 +218,8 @@ __all__ = [
     "USAGE_LOG",
     "WEBHOOKS",
     "TRIGGERS",
+    "TRIGGER_STATE",
+    "DROPBOX_DIR",
     "CHECKPOINTS",
     "SKILLS_DIR",
     "MEMORY_FILE",

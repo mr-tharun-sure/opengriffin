@@ -73,8 +73,9 @@ def _github_watcher(p: dict) -> dict:
                 "issues?since=..., /pulls, /actions/runs) or any GitHub tools you "
                 "have. Report ONLY new items: opened issues/PRs, review comments, "
                 "failed CI runs, merged PRs. One bullet per item with a link. "
-                "Remember what you have already reported (memory tools) so you "
-                "never repeat an item." + _SILENT_RULE
+                "Track what you already reported with trigger_state_get/"
+                "trigger_state_set (trigger_id='preset-github-watcher', store "
+                "reported item URLs) so you never repeat an item." + _SILENT_RULE
             ),
             "deliver_to": p.get("deliver_to", "home"),
         },
@@ -97,9 +98,10 @@ def _web_monitor(p: dict) -> dict:
             "kind": "agent",
             "prompt": (
                 f"You are watching {url or '(no url configured — reply SILENT)'}. "
-                "The fetched payload is attached. Compare it to what you remember "
-                "from previous checks (memory tools; store a short fingerprint of "
-                "the current state for next time). If something meaningful changed "
+                "The fetched payload is attached. Compare it to the fingerprint "
+                "stored via trigger_state_get (trigger_id='preset-web-monitor'), "
+                "then store an updated short fingerprint with trigger_state_set. "
+                "If something meaningful changed "
                 "— content, price, availability, a new mention — describe the "
                 "change in 2-4 lines with the link." + _SILENT_RULE
             ),
@@ -132,6 +134,154 @@ def _inbox_triage(p: dict) -> dict:
     }
 
 
+def _evening_review(p: dict) -> dict:
+    return {
+        "source": {"kind": "cron", "expr": p.get("cron", "0 21 * * *")},
+        "predicate": "",
+        "action": {
+            "kind": "agent",
+            "prompt": (
+                "Compose my evening review as one compact Telegram message:\n"
+                "1. Done today: infer from today's journal entries and any kanban "
+                "tasks that moved to done.\n"
+                "2. Still open: kanban tasks in progress or blocked, one line each.\n"
+                "3. Tomorrow: propose the top 3 things to tackle, based on what's "
+                "open and anything I said today about priorities.\n"
+                "Keep it under 2500 chars. Always deliver — never reply SILENT."
+            ),
+            "deliver_to": p.get("deliver_to", "home"),
+        },
+    }
+
+
+def _daily_standup(p: dict) -> dict:
+    return {
+        "source": {"kind": "cron", "expr": p.get("cron", "0 9 * * 1-5")},
+        "predicate": "",
+        "action": {
+            "kind": "agent",
+            "prompt": (
+                "Send me my standup prompt. In one short message: remind me what "
+                "I said I'd do (yesterday's journal + open kanban tasks, max 4 "
+                "bullets), then ask me: what are your top priorities today, and "
+                "is anything blocking you? My reply arrives as a normal chat "
+                "message — when it does, save the priorities with the memory "
+                "tools and update the kanban board accordingly. "
+                "Always deliver — never reply SILENT."
+            ),
+            "deliver_to": p.get("deliver_to", "home"),
+        },
+    }
+
+
+def _weekly_report(p: dict) -> dict:
+    return {
+        "source": {"kind": "cron", "expr": p.get("cron", "0 18 * * 0")},
+        "predicate": "",
+        "action": {
+            "kind": "agent",
+            "prompt": (
+                "Compose my week-in-review. Read the last 7 days of my journal "
+                "(~/.opengriffin/memories/JOURNAL.md) and usage stats, then write "
+                "a single message: the week's wins, what the nightly loops "
+                "learned about me, tasks completed vs carried over, and one "
+                "suggestion for next week. End by reminding me I can run "
+                "`griffin card` to turn this week's best journal entry into a "
+                "shareable card. Always deliver — never reply SILENT."
+            ),
+            "deliver_to": p.get("deliver_to", "home"),
+        },
+    }
+
+
+def _hn_mentions(p: dict) -> dict:
+    from urllib.parse import quote
+
+    keywords = p.get("keywords", "").strip()
+    url = (
+        "https://hn.algolia.com/api/v1/search_by_date?query="
+        + quote(keywords)
+        + "&tags=(story,comment)&hitsPerPage=20"
+        if keywords
+        else ""
+    )
+    return {
+        "source": {
+            "kind": "poll",
+            "url": url,
+            "interval_sec": int(p.get("interval_sec", 3600)),
+        },
+        "predicate": "",
+        "action": {
+            "kind": "agent",
+            "prompt": (
+                f"You are watching Hacker News for mentions of: "
+                f"{keywords or '(no keywords configured — reply SILENT)'}. "
+                "The attached payload is the latest Algolia search results. "
+                "Report only hits you have NOT reported before (track reported "
+                "objectIDs via trigger_state_get/trigger_state_set with "
+                "trigger_id='preset-hn-mentions'): title/comment gist, points, "
+                "and the news.ycombinator.com/item?id=<objectID> link. Skip "
+                "false-positive matches that aren't really about the subject." + _SILENT_RULE
+            ),
+            "deliver_to": p.get("deliver_to", "home"),
+        },
+    }
+
+
+def _rss_digest(p: dict) -> dict:
+    feeds = p.get("feeds", "").strip()
+    return {
+        # The rss source fetches every feed, dedups items by guid in the
+        # trigger state store, and only invokes the agent when something is
+        # genuinely new — quiet checks cost zero tokens.
+        "source": {
+            "kind": "rss",
+            "feeds": feeds,
+            "interval_sec": int(p.get("interval_sec", 1800)),
+        },
+        "predicate": "",
+        "action": {
+            "kind": "agent",
+            "prompt": (
+                "New items appeared in my RSS feeds (attached as new_items). "
+                "Summarize them as a compact digest: one bullet per item — "
+                "title, one-line gist if you can infer it, link. Group by feed "
+                "if there is more than one. Skip nothing; the source already "
+                "filtered to unseen items only."
+            ),
+            "deliver_to": p.get("deliver_to", "home"),
+        },
+    }
+
+
+def _file_dropbox(p: dict) -> dict:
+    directory = p.get("dir", "~/.opengriffin/dropbox")
+    return {
+        # The file source polls the directory and only invokes the agent when
+        # files were added or changed since the last check.
+        "source": {
+            "kind": "file",
+            "dir": directory,
+            "pattern": p.get("pattern", "*"),
+            "interval_sec": int(p.get("interval_sec", 120)),
+        },
+        "predicate": "",
+        "action": {
+            "kind": "agent",
+            "prompt": (
+                f"New files landed in my dropbox folder ({directory}); paths are "
+                "attached as new_files. For each: read it and act by type — "
+                "summarize documents/PDFs, transcribe audio (voice tools), "
+                "describe images, extract action items from meeting notes and "
+                "add them to the kanban board. Reply with one section per file. "
+                "Never delete or move the files."
+            ),
+            "deliver_to": p.get("deliver_to", "home"),
+        },
+    }
+
+
 # name -> (description, default params, builder). Params not listed here are
 # still passed through to the builder, so presets can grow options without
 # schema churn.
@@ -155,6 +305,41 @@ PRESETS: dict = {
         "description": "Periodic email sweep with urgency grouping and reply drafts in your voice.",
         "params": {"cron": "0 8,17 * * *", "deliver_to": "home"},
         "build": _inbox_triage,
+    },
+    "evening-review": {
+        "description": "End-of-day recap: what got done, what's open, proposed top 3 for tomorrow.",
+        "params": {"cron": "0 21 * * *", "deliver_to": "home"},
+        "build": _evening_review,
+    },
+    "daily-standup": {
+        "description": "Weekday-morning standup prompt; your reply updates memory and the kanban board.",
+        "params": {"cron": "0 9 * * 1-5", "deliver_to": "home"},
+        "build": _daily_standup,
+    },
+    "weekly-report": {
+        "description": "Sunday week-in-review from the journal, with a griffin card reminder.",
+        "params": {"cron": "0 18 * * 0", "deliver_to": "home"},
+        "build": _weekly_report,
+    },
+    "hn-mentions": {
+        "description": "Watch Hacker News for keyword mentions (your project, brand, competitors).",
+        "params": {"keywords": "", "interval_sec": 3600, "deliver_to": "home"},
+        "build": _hn_mentions,
+    },
+    "rss-digest": {
+        "description": "Digest of new items across RSS/Atom feeds; guid-deduplicated, zero cost when quiet.",
+        "params": {"feeds": "", "interval_sec": 1800, "deliver_to": "home"},
+        "build": _rss_digest,
+    },
+    "file-dropbox": {
+        "description": "Watch a folder; new files get read and processed by type (summarize/transcribe/extract tasks).",
+        "params": {
+            "dir": "~/.opengriffin/dropbox",
+            "pattern": "*",
+            "interval_sec": 120,
+            "deliver_to": "home",
+        },
+        "build": _file_dropbox,
     },
 }
 
