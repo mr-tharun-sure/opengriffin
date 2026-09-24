@@ -35,19 +35,83 @@ def run() -> None:
 
 @app.command()
 def doctor() -> None:
-    """Diagnose the install — check env vars, provider, ports, deps."""
+    """Diagnose the install — env file, tokens, Claude auth durability, provider."""
+    from pathlib import Path
+
+    from dotenv import load_dotenv
+
+    from . import paths as paths_module
     from . import providers as _p  # noqa
+
+    # Load .env exactly the way bot.py does, so doctor reports what the bot
+    # will actually see rather than whatever happens to be in the shell.
+    env_file = None
+    for candidate in (
+        paths_module.ENV_FILE,
+        Path.cwd() / ".env",
+        Path.home() / ".config" / "opengriffin" / ".env",
+    ):
+        if candidate.is_file():
+            load_dotenv(candidate)
+            env_file = candidate
+            break
 
     table = Table(title="OpenGriffin doctor")
     table.add_column("Check")
     table.add_column("Status")
     table.add_column("Detail")
 
+    table.add_row(
+        "Env file",
+        "✅" if env_file else "⚠️",
+        str(env_file) if env_file else "none found — copy .env.example to ~/.opengriffin/.env",
+    )
+
     prov = os.environ.get("OPENGRIFFIN_PROVIDER", "claude")
     table.add_row("Provider", "✅", prov)
 
     tok = os.environ.get("TELEGRAM_BOT_TOKEN")
     table.add_row("TELEGRAM_BOT_TOKEN", "✅" if tok else "❌", "set" if tok else "missing")
+
+    allowed = os.environ.get("TELEGRAM_ALLOWED_USERS", "").strip()
+    table.add_row(
+        "TELEGRAM_ALLOWED_USERS",
+        "✅" if allowed else "❌",
+        "set"
+        if allowed
+        else "missing — the bot refuses to start open (get your id from @userinfobot)",
+    )
+
+    # Claude auth durability. Interactive /login refresh tokens expire after
+    # ~28 days and are invalidated by logins elsewhere — fine on a laptop,
+    # a monthly outage on a 24/7 bot. See docs/headless.md.
+    oat = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    login_creds = Path.home() / ".claude" / ".credentials.json"
+    if oat and api_key:
+        table.add_row(
+            "Claude auth",
+            "⚠️",
+            "both CLAUDE_CODE_OAUTH_TOKEN and ANTHROPIC_API_KEY set — remove one so it's unambiguous which is used",
+        )
+    elif oat:
+        table.add_row("Claude auth", "✅", "long-lived setup-token (headless-safe, ~1 year)")
+    elif api_key:
+        table.add_row("Claude auth", "✅", "ANTHROPIC_API_KEY (never expires; pay-per-token)")
+    elif login_creds.is_file():
+        table.add_row(
+            "Claude auth",
+            "⚠️",
+            "interactive `claude /login` credentials — these expire ~monthly and break when you "
+            "log in elsewhere. For a 24/7 bot run `claude setup-token` and put "
+            "CLAUDE_CODE_OAUTH_TOKEN in your .env (see docs/headless.md)",
+        )
+    else:
+        table.add_row(
+            "Claude auth",
+            "❌",
+            "no credentials found — run `claude setup-token` (Max subscription) or set ANTHROPIC_API_KEY",
+        )
 
     try:
         from .providers import get_provider

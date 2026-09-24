@@ -13,6 +13,7 @@ cover the deeper topics.
 - [Security](security.md) — capability tokens, critic, attestation, dead-man's switch
 - [Cron + Triggers](cron.md) — scheduled work and ambient signal mesh
 - [Autonomous tasks](autonomous-tasks.md) — one-call presets: morning digest, GitHub watcher, web monitor, inbox triage
+- [Running headless](headless.md) — durable Claude auth (setup-token), service files, one-instance rule, triage table
 - [Migration](migration.md) — importers for state from prior agent runtimes
 - [Configuration](configuration.md) — every env var and config file
 - [Site](site.md) — `apps/web` Next.js landing page (stack, dev, deploy)
