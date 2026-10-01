@@ -196,12 +196,29 @@ def migrate_package_dir_state() -> list[str]:
         ("sessions.json", SESSIONS),
         ("aliases.json", ALIASES),
         ("webhooks.json", WEBHOOKS),
+        ("usage.jsonl", USAGE_LOG),
     ):
         src = _PKG_DIR / fname
         if src.is_file() and not dest.exists():
             try:
                 shutil.move(str(src), str(dest))
                 moved.append(fname)
+                log.info("paths.migrate: %s → %s", src, dest)
+            except OSError:
+                log.warning("could not migrate %s to %s", src, dest, exc_info=True)
+    # memory.py / self_improve.py also wrote MEMORY/USER/SOUL/JOURNAL inside
+    # the package's memories/ dir — move each file individually.
+    pkg_mem = _PKG_DIR / "memories"
+    if pkg_mem.is_dir():
+        for src in sorted(pkg_mem.glob("*")):
+            if not src.is_file():
+                continue
+            dest = MEM_DIR / src.name
+            if dest.exists():
+                continue
+            try:
+                shutil.move(str(src), str(dest))
+                moved.append(f"memories/{src.name}")
                 log.info("paths.migrate: %s → %s", src, dest)
             except OSError:
                 log.warning("could not migrate %s to %s", src, dest, exc_info=True)

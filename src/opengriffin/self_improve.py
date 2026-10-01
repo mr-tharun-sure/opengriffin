@@ -19,14 +19,12 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
-from pathlib import Path
+
+from .paths import JOURNAL_FILE, MEM_DIR
+from .paths import USAGE_LOG as USAGE_FILE
 
 log = logging.getLogger("opengriffin.self_improve")
 
-BOT_DIR = Path(__file__).resolve().parent
-MEM_DIR = BOT_DIR / "memories"
-JOURNAL_FILE = MEM_DIR / "JOURNAL.md"
-USAGE_FILE = BOT_DIR / "usage.jsonl"
 JOURNAL_MAX_ENTRIES = 90
 
 

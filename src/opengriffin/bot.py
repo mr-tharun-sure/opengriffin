@@ -63,6 +63,8 @@ from .redact import redact
 # Both idempotent — skip anything that already exists at the new location.
 paths_module.migrate_legacy_state()
 paths_module.migrate_package_dir_state()
+# Seed SOUL.md / personality presets / example memories on fresh installs.
+memory_module.seed_from_examples()
 
 # Look for .env in priority order: OG_HOME/.env (canonical), CWD (dev
 # convenience for `git clone && drop .env in the repo root && opengriffin run`),

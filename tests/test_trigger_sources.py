@@ -176,9 +176,11 @@ def test_once_trigger_fires_and_self_disables(monkeypatch):
 class _FakeScheduler:
     def __init__(self):
         self.jobs = []
+        self.triggers = {}
 
     def add_job(self, func, trigger=None, args=None, **kwargs):
         self.jobs.append((func.__name__, kwargs.get("id")))
+        self.triggers[kwargs.get("id")] = trigger
 
 
 def test_install_registers_all_source_kinds():
@@ -201,3 +203,18 @@ def test_install_registers_all_source_kinds():
     assert n == 5  # past-dated 'once' and disabled triggers are skipped
     names = {job_id for _, job_id in sched.jobs}
     assert names == {"trigger:c", "trigger:p", "trigger:r", "trigger:f", "trigger:o"}
+
+
+def test_cron_jitter_minutes_applied():
+    triggers._save(
+        {
+            "triggers": [
+                {"id": "j", "source": {"kind": "cron", "expr": "0 21 * * *", "jitter_minutes": 75}},
+                {"id": "nj", "source": {"kind": "cron", "expr": "0 7 * * *"}},
+            ]
+        }
+    )
+    sched = _FakeScheduler()
+    triggers.install_into_scheduler(sched)
+    assert sched.triggers["trigger:j"].jitter == 75 * 60
+    assert not getattr(sched.triggers["trigger:nj"], "jitter", None)

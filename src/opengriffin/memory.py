@@ -14,17 +14,15 @@ system prompt of the *next* session — same as the bot.
 from __future__ import annotations
 
 import re
+import shutil
 import threading
 from pathlib import Path
 from typing import Annotated, Literal
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
-BOT_DIR = Path(__file__).resolve().parent
-MEM_DIR = BOT_DIR / "memories"
-MEMORY_FILE = MEM_DIR / "MEMORY.md"
-USER_FILE = MEM_DIR / "USER.md"
-SOUL_FILE = MEM_DIR / "SOUL.md"
+from .paths import MEM_DIR, MEMORY_FILE, SOUL_FILE, USER_FILE
+
 SEP = "§"
 
 MEMORY_CAP = 2200
@@ -37,6 +35,28 @@ Target = Literal["memory", "user"]
 
 def _path(target: Target) -> Path:
     return MEMORY_FILE if target == "memory" else USER_FILE
+
+
+def seed_from_examples() -> list[str]:
+    """Copy memories.example/* into MEM_DIR for any file not already there.
+
+    Gives fresh installs a working SOUL.md and the /personality presets file
+    (which previously shipped in the repo but was never installed, so
+    /personality always reported 'no presets file'). Only exists for source
+    checkouts — the documented install path; wheel installs skip silently.
+    Never overwrites: the user's live memories always win.
+    """
+    example_dir = Path(__file__).resolve().parents[2] / "memories.example"
+    copied: list[str] = []
+    if not example_dir.is_dir():
+        return copied
+    MEM_DIR.mkdir(parents=True, exist_ok=True)
+    for src in sorted(example_dir.glob("*.md")):
+        dst = MEM_DIR / src.name
+        if not dst.exists():
+            shutil.copy2(src, dst)
+            copied.append(src.name)
+    return copied
 
 
 def _cap(target: Target) -> int:

@@ -282,6 +282,42 @@ def _file_dropbox(p: dict) -> dict:
     }
 
 
+def _companion_checkin(p: dict) -> dict:
+    return {
+        "source": {
+            "kind": "cron",
+            "expr": p.get("cron", "0 21 * * *"),
+            # Fire up to this many minutes off the cron time so the message
+            # lands "sometime in the evening", not at 21:00:00 like a cron job.
+            "jitter_minutes": int(p.get("jitter_minutes", 75)),
+        },
+        "predicate": "",
+        "action": {
+            "kind": "agent",
+            "prompt": (
+                "Companion check-in. Read today's and yesterday's journal "
+                "entries (~/.opengriffin/memories/JOURNAL.md) and USER.md for "
+                "OPEN LOOPS in my life: something I said I'd do, was worried "
+                "about, was excited about, or left unresolved.\n"
+                "Rules — these matter:\n"
+                "1. ONE message about ONE loop. Short (1-3 sentences), specific, "
+                "in your SOUL.md voice. Reference what I actually said.\n"
+                "2. Never generic ('how are you?', 'how's your day going?'). "
+                "Never a status report or a task list. You are checking in like "
+                "a friend who remembered, not an assistant filing a summary.\n"
+                "3. Check trigger_state_get (trigger_id='preset-companion-checkin') "
+                "for loops already asked about in the last 3 days — never repeat "
+                "one. After sending, record the loop and today's date with "
+                "trigger_state_set.\n"
+                "4. If there is no loop you can ask about GENUINELY and "
+                "specifically, reply SILENT. A skipped evening beats a hollow "
+                "message — never manufacture concern." + _SILENT_RULE
+            ),
+            "deliver_to": p.get("deliver_to", "home"),
+        },
+    }
+
+
 # name -> (description, default params, builder). Params not listed here are
 # still passed through to the builder, so presets can grow options without
 # schema churn.
@@ -340,6 +376,11 @@ PRESETS: dict = {
             "deliver_to": "home",
         },
         "build": _file_dropbox,
+    },
+    "companion-checkin": {
+        "description": "Evening companion message: follows up on ONE open loop from your journal, Dot-style; jittered timing; silent when nothing's genuine.",
+        "params": {"cron": "0 21 * * *", "jitter_minutes": 75, "deliver_to": "home"},
+        "build": _companion_checkin,
     },
 }
 
