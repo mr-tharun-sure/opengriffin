@@ -35,3 +35,15 @@ def test_migration_moves_package_dir_memories(tmp_path, monkeypatch):
     assert (og_mem / "JOURNAL.md").read_text() == "journal"
     assert (og_mem / "SOUL.md").read_text() == "real soul"
     assert (pkg / "memories" / "SOUL.md").exists()  # left for inspection
+
+
+def test_self_improve_pause_sentinel(tmp_path, monkeypatch):
+    import asyncio
+
+    from opengriffin import self_improve
+
+    sentinel = tmp_path / "self_improve.paused"
+    monkeypatch.setattr(self_improve, "PAUSE_FILE", sentinel)
+    sentinel.write_text("")
+    result = asyncio.run(self_improve.run_daily(bot=None, deliver_to=None))
+    assert "paused" in result

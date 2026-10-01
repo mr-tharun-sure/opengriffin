@@ -26,6 +26,10 @@ from .paths import USAGE_LOG as USAGE_FILE
 log = logging.getLogger("opengriffin.self_improve")
 
 JOURNAL_MAX_ENTRIES = 90
+# Touch this file to pause the nightly self-improvement run (e.g. while
+# traveling or debugging); delete it to resume. Checked at fire time so no
+# restart is needed either way.
+PAUSE_FILE = MEM_DIR.parent / "self_improve.paused"
 
 
 SELF_IMPROVE_PROMPT = """\
@@ -163,6 +167,10 @@ def yesterday_stats() -> dict:
 async def run_daily(bot, deliver_to: str | None = None) -> str:
     """Execute the daily self-improvement turn. Returns a short status string."""
     from . import bot as bot_module  # local import to avoid circular
+
+    if PAUSE_FILE.is_file():
+        log.info("daily self-improvement paused (sentinel: %s)", PAUSE_FILE)
+        return f"self-improvement paused (sentinel {PAUSE_FILE.name} present)"
 
     today = dt.date.today().isoformat()
     yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
