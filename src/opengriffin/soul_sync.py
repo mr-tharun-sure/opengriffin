@@ -19,7 +19,10 @@ from pathlib import Path
 
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
-PROJECT_DIR = Path.home() / ".claude" / "projects" / "-Users-macmini"
+# Claude Code stores session transcripts under a slug of the session cwd.
+# The bot runs sessions with cwd=Path.home(), so derive the slug from it
+# instead of hardcoding one machine's home directory.
+PROJECT_DIR = Path.home() / ".claude" / "projects" / str(Path.home()).replace("/", "-")
 VOICE_CARD = Path.home() / ".opengriffin" / "memories" / "VOICE.md"
 
 

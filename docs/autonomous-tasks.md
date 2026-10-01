@@ -28,6 +28,7 @@ parameters. Restart the bot to register new schedules.
 | `hn-mentions` | hourly poll | Watches Hacker News (Algolia API) for keyword mentions — your project, brand, competitors — deduplicated across checks. |
 | `rss-digest` | every 30 min | New items across your RSS/Atom feeds, deduplicated by guid in the trigger state store. Quiet checks never invoke the model. |
 | `file-dropbox` | every 2 min | Watch `~/.opengriffin/dropbox`; new files are read and processed by type — summarize documents, transcribe audio, extract action items to kanban. |
+| `companion-checkin` | ~9pm (jittered) | One warm, specific follow-up on an open loop from your journal — the Dot/Grok-companion move. Silent when nothing's genuine. |
 
 ### Parameters
 
@@ -41,6 +42,25 @@ Every preset accepts `deliver_to` (default `home`) and its own knobs:
 - `hn-mentions`: `keywords` (comma-separated search terms), `interval_sec`
 - `rss-digest`: `feeds` (comma-separated feed URLs), `interval_sec`
 - `file-dropbox`: `dir`, `pattern` (glob), `interval_sec`
+- `companion-checkin`: `cron`, `jitter_minutes` (default 75 — see below)
+
+Any cron-sourced trigger also accepts `jitter_minutes`: the firing time
+shifts randomly by up to that many minutes, so proactive messages land
+"sometime in the evening" instead of at :00 sharp like a cron job.
+
+## Companion mode
+
+The companion feel is the `companion-checkin` preset plus a persona:
+
+1. `/personality companion` (or `wit`) — applies a preset from
+   `SOUL.presets.md` (seeded into `~/.opengriffin/memories/` on first
+   run; edit it to make the voice yours).
+2. "enable the companion checkin" — one specific follow-up per evening
+   on something you actually said, deduplicated over a 3-day window via
+   the trigger state store, and silent when there's nothing genuine.
+
+The strictness is the feature: a hollow "how are you?" breaks the
+illusion faster than silence does.
 
 From Python:
 

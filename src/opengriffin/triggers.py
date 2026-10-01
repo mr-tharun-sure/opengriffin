@@ -177,9 +177,15 @@ def install_into_scheduler(scheduler) -> int:
         if src.get("kind") == "cron":
             from apscheduler.triggers.cron import CronTrigger
 
+            cron_trig = CronTrigger.from_crontab(src["expr"])
+            # Optional humanizing jitter: fire up to N minutes off the exact
+            # cron time, so companion-style messages don't land at :00 sharp.
+            jitter_min = int(src.get("jitter_minutes", 0) or 0)
+            if jitter_min:
+                cron_trig.jitter = jitter_min * 60
             scheduler.add_job(
                 _run_trigger,
-                trigger=CronTrigger.from_crontab(src["expr"]),
+                trigger=cron_trig,
                 args=[t],
                 id=f"trigger:{t['id']}",
                 name=f"trigger:{t['id']}",

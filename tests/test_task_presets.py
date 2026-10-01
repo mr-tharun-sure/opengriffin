@@ -107,3 +107,14 @@ def test_silent_reply_is_not_delivered(monkeypatch):
     result, sent = _run_agent_trigger(monkeypatch, "SILENT")
     assert result == "SILENT"
     assert sent == []
+
+
+def test_companion_checkin_preset():
+    t = task_presets.build("companion-checkin")
+    assert t["source"]["jitter_minutes"] == 75
+    prompt = t["action"]["prompt"]
+    assert "preset-companion-checkin" in prompt  # state-store dedup wired in
+    assert "SILENT" in prompt
+    t = task_presets.build("companion-checkin", {"cron": "30 20 * * *", "jitter_minutes": 40})
+    assert t["source"]["expr"] == "30 20 * * *"
+    assert t["source"]["jitter_minutes"] == 40

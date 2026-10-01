@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from pathlib import Path
 from typing import Any
 
-LOG_FILE = Path(__file__).resolve().parent / "usage.jsonl"
+from .paths import USAGE_LOG as LOG_FILE
 
 
 def record(
